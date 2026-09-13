@@ -1,0 +1,36 @@
+# Xcode / build
+DerivedData/
+build/
+Build/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+*.xcuserstate
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# XcodeGen generated Info.plist
+Generated/
+
+# CocoaPods / SPM (not currently used, ignored defensively)
+Pods/
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Local secrets / config — never commit
+*.env
+.env.*
+Secrets.plist
+*.xcconfig.local
+
+# Fastlane (not currently used, ignored defensively)
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
