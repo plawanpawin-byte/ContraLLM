@@ -9,6 +9,9 @@ on:
       - "project.yml"
       - ".github/workflows/build-ios.yml"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build unsigned IPA
@@ -78,3 +81,17 @@ jobs:
           name: ContraLLM-IPA
           path: dist/ContraLLM-unsigned.ipa
           if-no-files-found: error
+        continue-on-error: true
+
+      - name: Publish IPA as a GitHub Release
+        # Release assets use the repo's regular storage, not the Actions
+        # artifact storage quota, so this stays downloadable even if the
+        # artifact upload above is ever blocked by that quota.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="build-${{ github.run_number }}"
+          gh release create "$TAG" dist/ContraLLM-unsigned.ipa \
+            --title "Contra LLM build #${{ github.run_number }}" \
+            --notes "Unsigned IPA built from commit ${{ github.sha }}. Install with Sideloadly." \
+            --repo "${{ github.repository }}"

@@ -121,7 +121,23 @@ into `Payload/` → zip to `ContraLLM-unsigned.ipa` → upload as the
 It runs on every push that touches app source, and can also be triggered
 manually via **Actions → Build iOS IPA → Run workflow**.
 
+The IPA is published two ways so it stays downloadable even if your
+account's Actions artifact storage is full:
+
+- **Actions artifact** named `ContraLLM-IPA` (zip you extract)
+- **GitHub Release** named `build-<run number>` with `ContraLLM-unsigned.ipa`
+  attached directly (release assets don't count against Actions storage quota)
+
 ## Download the IPA
+
+**Option A — from Releases (recommended, always available):**
+
+1. Open this repository on GitHub
+2. Go to the **Releases** section (right sidebar, or `/releases`)
+3. Open the latest `build-N` release
+4. Download `ContraLLM-unsigned.ipa` from its assets
+
+**Option B — from Actions artifact:**
 
 1. Open this repository on GitHub
 2. Go to **Actions**
