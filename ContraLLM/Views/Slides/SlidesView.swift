@@ -50,6 +50,7 @@ struct SlidesView: View {
                     text: $draftText,
                     placeholder: "Ask about this slide…",
                     isLoading: chatViewModel.isSending,
+                    quickActions: ["Summarize"],
                     onSend: { text in
                         let slideTitle = slides[currentIndex].title
                         chatViewModel.send(text, contextPrefix: "About slide \"\(slideTitle)\"")

@@ -49,6 +49,7 @@ struct NotebookView: View {
                 text: $draftText,
                 placeholder: "Ask about your notes…",
                 isLoading: chatViewModel.isSending,
+                quickActions: ["Summarize"],
                 onSend: { chatViewModel.send($0, contextPrefix: "About the notebook") }
             )
             .padding(.horizontal, 16)

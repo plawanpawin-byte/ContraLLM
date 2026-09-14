@@ -59,6 +59,7 @@ struct VoiceView: View {
                     text: $draftText,
                     placeholder: "Explain this in simple terms…",
                     isLoading: chatViewModel.isSending,
+                    quickActions: ["Summarize"],
                     onSend: { chatViewModel.send($0) }
                 )
             }

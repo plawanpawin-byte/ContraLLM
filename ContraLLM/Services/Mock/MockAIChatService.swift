@@ -45,7 +45,11 @@ final class MockAIChatService: AIChatService {
         let bullets: [String]
         let followUps: [String]
 
-        if lower.contains("simple") {
+        if lower.contains("summar") {
+            text = "Summary of \"\(workspace.title)\": the source lays out a core problem, introduces a mechanism to solve it, and shows why that mechanism generalizes well beyond the original example."
+            bullets = ["Core problem the source addresses", "The mechanism it introduces to solve it", "Why the idea generalizes further"]
+            followUps = ["What's the most important idea?", "Explain this in simple terms"]
+        } else if lower.contains("simple") {
             text = "In simple terms, \"\(workspace.title)\" breaks down a complex idea into a few core building blocks that work together."
             bullets = ["The source introduces a core problem", "It proposes a clear mechanism to solve it", "The result generalizes to many use cases"]
             followUps = ["What's the most important idea?", "Why does this matter?"]

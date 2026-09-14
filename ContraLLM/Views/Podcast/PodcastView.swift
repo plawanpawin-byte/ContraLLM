@@ -33,6 +33,7 @@ struct PodcastView: View {
                 text: $draftText,
                 placeholder: "Ask about this episode…",
                 isLoading: chatViewModel.isSending,
+                quickActions: ["Summarize"],
                 onSend: { chatViewModel.send($0, contextPrefix: "About the podcast") }
             )
             .padding(.horizontal, 16)

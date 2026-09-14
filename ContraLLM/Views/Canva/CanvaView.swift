@@ -29,7 +29,7 @@ struct CanvaView: View {
                 Spacer(minLength: 8)
 
                 demoVideo
-                    .frame(height: 220)
+                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
                     .frame(maxWidth: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: ContraTheme.cardRadius, style: .continuous))
                     .overlay(
@@ -63,7 +63,8 @@ struct CanvaView: View {
             .navigationTitle("Canva")
             .navigationBarTitleDisplayMode(.inline)
             .background(ContraTheme.background.ignoresSafeArea())
-            .onAppear(perform: preparePlayerIfNeeded)
+            .onAppear(perform: enterTab)
+            .onDisappear(perform: leaveTab)
         }
     }
 
@@ -72,7 +73,6 @@ struct CanvaView: View {
         if let player {
             VideoPlayer(player: player)
                 .disabled(true) // decorative — no playback controls
-                .onAppear { player.play() }
         } else {
             RoundedRectangle(cornerRadius: ContraTheme.cardRadius, style: .continuous)
                 .fill(ContraTheme.surface)
@@ -115,11 +115,25 @@ struct CanvaView: View {
         }
     }
 
+    /// Called when this tab becomes the visible one. Sound only plays while
+    /// the user is actually looking at this tab.
+    private func enterTab() {
+        preparePlayerIfNeeded()
+        player?.isMuted = false
+        player?.play()
+    }
+
+    /// Called when the user navigates away from this tab — stop the sound
+    /// immediately rather than letting it keep playing in the background.
+    private func leaveTab() {
+        player?.pause()
+        player?.isMuted = true
+    }
+
     private func preparePlayerIfNeeded() {
         guard player == nil, let url = Bundle.main.url(forResource: "canva-demo", withExtension: "mp4") else { return }
         let item = AVPlayerItem(url: url)
         let queuePlayer = AVQueuePlayer()
-        queuePlayer.isMuted = true
         looper = AVPlayerLooper(player: queuePlayer, templateItem: item)
         player = queuePlayer
     }

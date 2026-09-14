@@ -12,11 +12,40 @@ struct AIPromptBar: View {
     @Binding var text: String
     var placeholder: String = "Ask a question…"
     var isLoading: Bool = false
+    /// Short labels shown as tappable chips above the input, e.g. ["Summarize"].
+    /// Tapping one sends its label as a message immediately.
+    var quickActions: [String] = []
     var onSend: (String) -> Void
 
     @FocusState private var isFocused: Bool
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !quickActions.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(quickActions, id: \.self) { action in
+                            Button {
+                                onSend(action)
+                            } label: {
+                                Text(action)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(ContraTheme.accent)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 7)
+                                    .background(ContraTheme.accentSoft)
+                                    .clipShape(Capsule())
+                            }
+                            .disabled(isLoading)
+                        }
+                    }
+                }
+            }
+            inputRow
+        }
+    }
+
+    private var inputRow: some View {
         HStack(spacing: 10) {
             TextField(placeholder, text: $text, axis: .vertical)
                 .lineLimit(1...4)

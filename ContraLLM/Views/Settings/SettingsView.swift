@@ -18,10 +18,37 @@ struct SettingsView: View {
     @State private var customEndpoint = ""
     @State private var sharedSecret = ""
     @State private var connectionTest: ConnectionTestState = .idle
+    @AppStorage(AppStorageKey.themeMode) private var themeModeRaw: String = AppThemeMode.system.rawValue
+    @AppStorage(AppStorageKey.displayName) private var displayName: String = ""
 
     var body: some View {
         NavigationStack {
             Form {
+                Section("Profile") {
+                    HStack(spacing: 14) {
+                        ZStack {
+                            Circle()
+                                .fill(ContraTheme.accentSoft)
+                                .frame(width: 48, height: 48)
+                            Text(profileInitials)
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(ContraTheme.accent)
+                        }
+                        TextField("Your name", text: $displayName)
+                            .font(.system(size: 16, weight: .medium))
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                Section("Appearance") {
+                    Picker("Theme", selection: $themeModeRaw) {
+                        ForEach(AppThemeMode.allCases) { mode in
+                            Text(mode.label).tag(mode.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
                 Section("General") {
                     Label("iOS 17+", systemImage: "iphone")
                     Label("Contra LLM v1.0", systemImage: "info.circle")
@@ -92,6 +119,14 @@ struct SettingsView: View {
                 sharedSecret = configStore.configuration.sharedSecret
             }
         }
+    }
+
+    private var profileInitials: String {
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "🙂" }
+        let words = trimmed.split(separator: " ")
+        let letters = words.prefix(2).compactMap { $0.first }
+        return String(letters).uppercased()
     }
 
     @ViewBuilder
