@@ -20,11 +20,11 @@ final class ChatViewModel: ObservableObject {
     init(
         workspace: Workspace,
         initialMessages: [AIMessage] = [],
-        aiChatService: AIChatService = ServiceContainer.shared.aiChatService
+        aiChatService: AIChatService? = nil
     ) {
         self.workspace = workspace
         self.messages = initialMessages
-        self.aiChatService = aiChatService
+        self.aiChatService = aiChatService ?? ServiceContainer.shared.aiChatService
     }
 
     func send(_ text: String, contextPrefix: String? = nil) {

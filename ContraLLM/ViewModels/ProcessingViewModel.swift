@@ -34,12 +34,12 @@ final class ProcessingViewModel: ObservableObject {
 
     init(
         source: SourceItem,
-        aiChatService: AIChatService = ServiceContainer.shared.aiChatService,
-        documentProcessingService: DocumentProcessingService = ServiceContainer.shared.documentProcessingService
+        aiChatService: AIChatService? = nil,
+        documentProcessingService: DocumentProcessingService? = nil
     ) {
         self.source = source
-        self.aiChatService = aiChatService
-        self.documentProcessingService = documentProcessingService
+        self.aiChatService = aiChatService ?? ServiceContainer.shared.aiChatService
+        self.documentProcessingService = documentProcessingService ?? ServiceContainer.shared.documentProcessingService
     }
 
     func start() {

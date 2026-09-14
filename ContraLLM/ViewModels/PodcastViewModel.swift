@@ -21,9 +21,9 @@ final class PodcastViewModel: ObservableObject {
     private let workspace: Workspace
     private let podcastService: PodcastService
 
-    init(workspace: Workspace, podcastService: PodcastService = ServiceContainer.shared.podcastService) {
+    init(workspace: Workspace, podcastService: PodcastService? = nil) {
         self.workspace = workspace
-        self.podcastService = podcastService
+        self.podcastService = podcastService ?? ServiceContainer.shared.podcastService
     }
 
     func generateIfNeeded() {
