@@ -10,7 +10,8 @@ final class MockDocumentProcessingService: DocumentProcessingService {
         try await Task.sleep(nanoseconds: 500_000_000)
         return ProcessedContent(
             notebook: MockContent.notebookBlocks(for: source),
-            slides: MockContent.slides(for: source)
+            slides: MockContent.slides(for: source),
+            sourceText: nil
         )
     }
 }

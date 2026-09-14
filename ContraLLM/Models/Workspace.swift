@@ -23,6 +23,15 @@ final class Workspace {
     var slidesData: Data?
     var podcastData: Data?
     var chatHistoryData: Data?
+    /// Plain-text content extracted from the source (PDF/text/website), used
+    /// to ground real AI chat/processing calls. Capped in length. Absent for
+    /// sources where extraction wasn't possible (e.g. YouTube, audio).
+    var sourceTextData: Data?
+
+    var sourceText: String? {
+        get { sourceTextData.flatMap { String(data: $0, encoding: .utf8) } }
+        set { sourceTextData = newValue?.data(using: .utf8) }
+    }
 
     var sourceType: SourceType {
         SourceType(rawValue: sourceTypeRaw) ?? .text

@@ -3,9 +3,11 @@
 //  ContraLLM
 //
 //  Single place that wires concrete service implementations to the protocols
-//  the rest of the app depends on. Today everything resolves to the Mock/*
-//  demo providers so the app is fully usable without a backend. Swap any
-//  property here for a production implementation without touching call sites.
+//  the rest of the app depends on. aiChatService and documentProcessingService
+//  switch live between the Mock/* demo providers and the Backend/* real
+//  implementations based on Settings → AI → "Use demo AI provider" — so
+//  toggling it takes effect immediately, no relaunch needed. Podcast and
+//  speech services stay mocked for now (see README "Known limitations").
 //
 
 import Foundation
@@ -14,19 +16,22 @@ import Foundation
 final class ServiceContainer {
     static let shared = ServiceContainer()
 
-    let aiChatService: AIChatService
-    let podcastService: PodcastService
-    let documentProcessingService: DocumentProcessingService
-    let speechToTextService: SpeechToTextService
-    let textToSpeechService: TextToSpeechService
+    private let mockAIChatService = MockAIChatService()
+    private let mockDocumentProcessingService = MockDocumentProcessingService()
 
-    private init() {
-        // Wire mock/demo providers by default. A production backend can be
-        // swapped in here based on APIConfigurationStore.shared.configuration.
-        self.aiChatService = MockAIChatService()
-        self.podcastService = MockPodcastService()
-        self.documentProcessingService = MockDocumentProcessingService()
-        self.speechToTextService = MockSpeechToTextService()
-        self.textToSpeechService = MockTextToSpeechService()
+    let podcastService: PodcastService = MockPodcastService()
+    let speechToTextService: SpeechToTextService = MockSpeechToTextService()
+    let textToSpeechService: TextToSpeechService = MockTextToSpeechService()
+
+    private init() {}
+
+    var aiChatService: AIChatService {
+        let config = APIConfigurationStore.shared.configuration
+        return config.useMockProviders ? mockAIChatService : BackendAIChatService(configuration: config)
+    }
+
+    var documentProcessingService: DocumentProcessingService {
+        let config = APIConfigurationStore.shared.configuration
+        return config.useMockProviders ? mockDocumentProcessingService : BackendDocumentProcessingService(configuration: config)
     }
 }

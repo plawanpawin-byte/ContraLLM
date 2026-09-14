@@ -55,7 +55,13 @@ final class HomeViewModel: ObservableObject {
             default: type = .document
             }
 
-            return SourceItem(type: type, displayName: url.lastPathComponent, localURL: url)
+            // The picker's URL is only readable while its security scope is
+            // held (this call). Copy the file into our own sandbox now so
+            // later async processing (Processing screen, real extraction)
+            // can still read it after this scope closes.
+            let persistedURL = copyIntoSandbox(url)
+
+            return SourceItem(type: type, displayName: url.lastPathComponent, localURL: persistedURL ?? url)
         }
     }
 
@@ -70,5 +76,27 @@ final class HomeViewModel: ObservableObject {
         }
         let displayName = String(trimmed.prefix(60))
         return SourceItem(type: .text, displayName: displayName.isEmpty ? "Pasted text" : displayName)
+    }
+
+    /// Copies an imported file into `Application Support/Sources`, returning
+    /// the new persistent URL, or nil if the copy fails (caller falls back
+    /// to the original URL — best-effort, not fatal).
+    private func copyIntoSandbox(_ url: URL) -> URL? {
+        let fileManager = FileManager.default
+        guard let supportDir = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let destinationDir = supportDir.appendingPathComponent("Sources", isDirectory: true)
+        do {
+            try fileManager.createDirectory(at: destinationDir, withIntermediateDirectories: true)
+            let destination = destinationDir.appendingPathComponent(UUID().uuidString + "-" + url.lastPathComponent)
+            if fileManager.fileExists(atPath: destination.path) {
+                try fileManager.removeItem(at: destination)
+            }
+            try fileManager.copyItem(at: url, to: destination)
+            return destination
+        } catch {
+            return nil
+        }
     }
 }

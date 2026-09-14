@@ -80,7 +80,8 @@ Whisper, or a custom backend means implementing the protocol and updating
 ### No hardcoded secrets
 
 The iOS client never embeds an AI provider API key. `APIConfiguration`
-describes only a backend base URL:
+describes only a backend base URL (plus an optional shared secret, not a
+provider key):
 
 ```
 iPhone → Contra Backend / API Gateway → AI Provider
@@ -88,6 +89,31 @@ iPhone → Contra Backend / API Gateway → AI Provider
 
 A developer-mode custom endpoint (Settings → AI → Developer Mode) lets you
 point the app at a local or staging backend for testing.
+
+## Real AI backend (`backend/`)
+
+`backend/worker` is a small Cloudflare Worker that proxies the app to
+Anthropic — the one real, non-mock `AIChatService`/`DocumentProcessingService`
+backend. It holds the Anthropic API key as a Cloudflare secret; the app never
+sees it. One deployment can be shared by everyone using the app.
+
+**Deploy it and turn on real AI:** see [`backend/README.md`](backend/README.md)
+for the 5-minute setup, then in the app go to **Settings → AI**, turn off
+"Use demo AI provider", turn on Developer Mode, and paste in your Worker's
+URL (and shared secret, if you set one).
+
+With it enabled: `generateWorkspaceTitle` and chat (`AIChatService`) call
+real Claude, and `DocumentProcessingService` extracts real text — PDFKit for
+PDF/text files, a lightweight HTML strip for websites — then asks the
+backend to turn that into grounded notebook blocks and slides. YouTube,
+Google Docs, and audio sources don't have an extraction path wired up yet
+(transcript fetch / speech-to-text), so those still fall back to demo
+content even with real AI turned on. If the backend is unreachable or
+misconfigured, processing degrades to demo content automatically rather than
+failing the screen.
+
+Podcast audio and speech-to-text/text-to-speech remain mocked — see Known
+limitations below.
 
 ## Requirements
 
@@ -187,8 +213,14 @@ AI Provider (OpenAI / Anthropic / Gemini / OpenRouter / vLLM / Ollama / ElevenLa
 
 ## Known limitations
 
-- All AI, podcast, and speech behavior in this build uses mock/demo
-  providers — no network calls are made and no API key is required
+- By default the app uses mock/demo providers — no network calls, no API
+  key required. Real AI chat and document processing are available by
+  deploying `backend/` and switching it on in Settings (see above);
+  podcast/speech still use mock providers either way.
+- Real document processing only extracts text on-device for PDF, plain
+  text/document files, and websites (basic HTML strip). YouTube, Google
+  Docs, and audio sources still use demo content since transcript
+  fetch/speech-to-text aren't wired up yet.
 - Podcast audio playback is UI-complete but has no real synthesized audio
   file in demo mode (no `audioURL`)
 - Speech-to-text/text-to-speech are stubbed; wiring to Apple's Speech

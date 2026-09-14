@@ -9,6 +9,7 @@ struct SettingsView: View {
     @StateObject private var configStore = APIConfigurationStore.shared
     @State private var showDeveloperMode = false
     @State private var customEndpoint = ""
+    @State private var sharedSecret = ""
 
     var body: some View {
         NavigationStack {
@@ -20,13 +21,15 @@ struct SettingsView: View {
 
                 Section("AI") {
                     Toggle("Use demo AI provider", isOn: $configStore.configuration.useMockProviders)
-                    Text("Contra never stores AI provider keys on this device. Requests are routed through the Contra backend, which connects to your configured AI provider.")
+                    Text(configStore.configuration.useMockProviders
+                         ? "Contra is using offline demo content — no network calls, no API key needed."
+                         : "Contra never stores AI provider keys on this device. Requests are routed through your configured backend, which connects to your AI provider.")
                         .font(.system(size: 12))
                         .foregroundStyle(ContraTheme.textSecondary)
 
                     Toggle("Developer Mode", isOn: $showDeveloperMode)
                     if showDeveloperMode {
-                        TextField("Custom backend URL", text: $customEndpoint)
+                        TextField("Backend URL (e.g. your Worker's .workers.dev URL)", text: $customEndpoint)
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
                             .onSubmit {
@@ -34,7 +37,16 @@ struct SettingsView: View {
                                     configStore.configuration.baseURL = url
                                 }
                             }
+                        SecureField("Backend secret (optional)", text: $sharedSecret)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .onSubmit {
+                                configStore.configuration.sharedSecret = sharedSecret
+                            }
                         Text("Current: \(configStore.configuration.baseURL.absoluteString)")
+                            .font(.system(size: 12))
+                            .foregroundStyle(ContraTheme.textTertiary)
+                        Text("See backend/README.md to deploy your own backend and get this URL.")
                             .font(.system(size: 12))
                             .foregroundStyle(ContraTheme.textTertiary)
                     }
@@ -55,6 +67,10 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .onAppear {
+                customEndpoint = configStore.configuration.baseURL.absoluteString
+                sharedSecret = configStore.configuration.sharedSecret
+            }
         }
     }
 }

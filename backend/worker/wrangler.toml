@@ -1,0 +1,16 @@
+name = "contrallm-backend"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+[vars]
+# Which Anthropic model to call. Override with `wrangler secret put MODEL`
+# or by editing this value — it's not sensitive, so a plain var is fine.
+MODEL = "claude-haiku-4-5-20251001"
+
+# Secrets (never put these here — set them with `wrangler secret put <NAME>`):
+#   ANTHROPIC_API_KEY   required. Your Anthropic API key. Never leaves this Worker.
+#   APP_SHARED_SECRET   optional. If set, requests must send it as
+#                       `Authorization: Bearer <value>` or they're rejected.
+#                       Without it, anyone who has your Worker URL can spend
+#                       your Anthropic budget — set this before sharing the
+#                       app with anyone else.

@@ -60,6 +60,7 @@ final class ProcessingViewModel: ObservableObject {
             let workspace = Workspace(title: title, sourceDisplayName: source.displayName, sourceType: source.type)
             workspace.notebookData = try? JSONEncoder().encode(content.notebook)
             workspace.slidesData = try? JSONEncoder().encode(content.slides)
+            workspace.sourceText = content.sourceText
 
             try await advance() // Creating learning formats
 

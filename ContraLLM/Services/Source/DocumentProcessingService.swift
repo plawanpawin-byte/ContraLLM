@@ -11,6 +11,10 @@ import Foundation
 struct ProcessedContent {
     let notebook: [NotebookBlock]
     let slides: [Slide]
+    /// Plain-text extracted from the source, if any was available. Stored on
+    /// the resulting Workspace so later AI chat calls can ground answers in
+    /// the real source instead of just its title.
+    var sourceText: String? = nil
 }
 
 protocol DocumentProcessingService {

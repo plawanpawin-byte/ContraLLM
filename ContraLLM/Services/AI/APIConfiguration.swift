@@ -17,10 +17,15 @@ import Foundation
 struct APIConfiguration: Codable, Equatable {
     var baseURL: URL
     var useMockProviders: Bool
+    /// Optional shared secret sent as `Authorization: Bearer <value>` on
+    /// every backend request. Matches the Worker's `APP_SHARED_SECRET`, if
+    /// the person hosting the backend set one. Never a provider API key.
+    var sharedSecret: String
 
     static let `default` = APIConfiguration(
         baseURL: URL(string: "https://api.contrallm.app")!,
-        useMockProviders: true
+        useMockProviders: true,
+        sharedSecret: ""
     )
 }
 
