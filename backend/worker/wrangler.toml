@@ -5,8 +5,9 @@ compatibility_date = "2024-11-01"
 [vars]
 # Which OpenRouter model to call — browse free options at
 # https://openrouter.ai/models?max_price=0 (filter by "Free"). Not
-# sensitive, plain var is fine.
-MODEL = "mistralai/mistral-7b-instruct:free"
+# sensitive, plain var is fine. This one isn't :free-tagged, so it draws
+# from the credit limit set on the OpenRouter key itself (see backend/README.md).
+MODEL = "google/gemini-3.8-flash"
 # Max AI requests per access code per UTC day. Only enforced if USER_TOKENS
 # is set and USAGE_KV is bound (see below).
 DAILY_LIMIT = "100"
