@@ -5,11 +5,19 @@
 
 import SwiftUI
 
+private enum ConnectionTestState: Equatable {
+    case idle
+    case testing
+    case success(label: String?)
+    case failure(String)
+}
+
 struct SettingsView: View {
     @StateObject private var configStore = APIConfigurationStore.shared
     @State private var showDeveloperMode = false
     @State private var customEndpoint = ""
     @State private var sharedSecret = ""
+    @State private var connectionTest: ConnectionTestState = .idle
 
     var body: some View {
         NavigationStack {
@@ -49,6 +57,18 @@ struct SettingsView: View {
                         Text("Each person needs their own access code — it has its own daily limit. See backend/README.md.")
                             .font(.system(size: 12))
                             .foregroundStyle(ContraTheme.textTertiary)
+
+                        Button(action: testConnection) {
+                            HStack(spacing: 8) {
+                                if connectionTest == .testing {
+                                    ProgressView()
+                                }
+                                Text("Test Connection")
+                            }
+                        }
+                        .disabled(connectionTest == .testing)
+
+                        connectionTestStatus
                     }
                 }
 
@@ -70,6 +90,52 @@ struct SettingsView: View {
             .onAppear {
                 customEndpoint = configStore.configuration.baseURL.absoluteString
                 sharedSecret = configStore.configuration.sharedSecret
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var connectionTestStatus: some View {
+        switch connectionTest {
+        case .idle:
+            EmptyView()
+        case .testing:
+            EmptyView()
+        case .success(let label):
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Text(label.map { "Connected as \($0)" } ?? "Connected")
+            }
+            .font(.system(size: 12, weight: .medium))
+        case .failure(let message):
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(.red)
+                Text(message)
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.red)
+        }
+    }
+
+    private func testConnection() {
+        // Make sure we're testing whatever's currently typed in the fields,
+        // not stale committed values the user hasn't hit return on yet.
+        if let url = URL(string: customEndpoint) {
+            configStore.configuration.baseURL = url
+        }
+        configStore.configuration.sharedSecret = sharedSecret
+
+        connectionTest = .testing
+        let client = BackendAPIClient(configuration: configStore.configuration)
+        Task {
+            struct VerifyResponse: Decodable { let ok: Bool; let label: String? }
+            do {
+                let result: VerifyResponse = try await client.get(path: "/v1/verify")
+                connectionTest = result.ok ? .success(label: result.label) : .failure("Backend responded but did not confirm.")
+            } catch let error as AIServiceError {
+                connectionTest = .failure(error.errorDescription ?? "Connection failed.")
+            } catch {
+                connectionTest = .failure("Couldn't reach the backend.")
             }
         }
     }

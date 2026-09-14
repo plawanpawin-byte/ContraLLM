@@ -13,6 +13,17 @@ import Foundation
 struct BackendAPIClient {
     let configuration: APIConfiguration
 
+    func get<Response: Decodable>(
+        path: String,
+        timeout: TimeInterval = 15
+    ) async throws -> Response {
+        var request = URLRequest(url: configuration.baseURL.appendingPathComponent(path))
+        request.httpMethod = "GET"
+        request.timeoutInterval = timeout
+        applyAuthHeader(&request)
+        return try await send(request)
+    }
+
     func post<Request: Encodable, Response: Decodable>(
         path: String,
         body: Request,
@@ -22,9 +33,7 @@ struct BackendAPIClient {
         request.httpMethod = "POST"
         request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if !configuration.sharedSecret.isEmpty {
-            request.setValue("Bearer \(configuration.sharedSecret)", forHTTPHeaderField: "Authorization")
-        }
+        applyAuthHeader(&request)
 
         do {
             request.httpBody = try JSONEncoder().encode(body)
@@ -32,6 +41,16 @@ struct BackendAPIClient {
             throw AIServiceError.invalidResponse
         }
 
+        return try await send(request)
+    }
+
+    private func applyAuthHeader(_ request: inout URLRequest) {
+        if !configuration.sharedSecret.isEmpty {
+            request.setValue("Bearer \(configuration.sharedSecret)", forHTTPHeaderField: "Authorization")
+        }
+    }
+
+    private func send<Response: Decodable>(_ request: URLRequest) async throws -> Response {
         let data: Data
         let response: URLResponse
         do {

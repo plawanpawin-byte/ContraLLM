@@ -284,6 +284,13 @@ export default {
       return unauthorized("Unknown or missing access code.");
     }
 
+    // Cheap auth check the app uses for its "Test Connection" button — valid
+    // access code + reachable Worker, without spending a quota slot or
+    // calling the AI provider.
+    if (request.method === "GET" && url.pathname === "/v1/verify") {
+      return json({ ok: true, label: user.open ? null : user.label });
+    }
+
     const quota = await checkAndConsumeQuota(env, user);
     if (!quota.allowed) {
       return json(

@@ -14,6 +14,9 @@ struct RootTabView: View {
             LibraryView()
                 .tabItem { Label("Library", systemImage: "square.grid.2x2") }
 
+            CanvaView()
+                .tabItem { Label("Canva", systemImage: "paintpalette") }
+
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
