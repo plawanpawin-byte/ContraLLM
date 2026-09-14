@@ -8,6 +8,10 @@
  *   POST /v1/title    -> generate a short workspace title from a source
  *   POST /v1/chat     -> answer a question about a workspace's source
  *   POST /v1/process  -> turn extracted source text into notebook + slides
+ *   POST /v1/podcast  -> write a casual narration script (audio is rendered
+ *                        on-device by the app, not here)
+ *   POST /v1/extract  -> server-side text extraction (Google Docs today)
+ *   GET  /v1/verify   -> check an access code without spending its quota
  *   GET  /health      -> liveness check
  *
  * Auth + per-user daily quota: each person gets their own access code (not
@@ -378,6 +382,56 @@ async function handleProcess(request, env) {
   return json({ notebook, slides });
 }
 
+async function handlePodcast(request, env) {
+  const { sourceName = "", sourceType = "", sourceText = "" } = await request.json();
+
+  if (!sourceText || sourceText.trim().length < 20) {
+    return json({ error: "sourceText is required and must have real content" }, 400);
+  }
+
+  const system =
+    "You write a solo-host podcast narration script based on a source document. " +
+    "Style: casual and conversational, like a fun, sharp friend telling you about something " +
+    "genuinely interesting over coffee — NOT a dry lecture or a list of facts. Tell it as a " +
+    "story with a clear arc. Add a light touch of humor here and there where it fits naturally " +
+    "(a wry aside, a relatable comparison) — don't force jokes. Address the listener directly " +
+    "sometimes (\"here's the fun part\", \"you'll like this\"). Keep pacing brisk and clear, " +
+    "short sentences, easy to follow by ear. " +
+    "Respond with STRICT JSON ONLY, no markdown fences, no commentary, matching exactly:\n" +
+    '{"title": "short catchy episode title", "segments": ["segment 1 — 1-3 sentences", ' +
+    '"segment 2", ...10-18 segments total]}\n' +
+    "Each segment is spoken back to back as one continuous narration — keep them short so " +
+    "captions stay readable on a phone screen. Ground everything in the given source text — " +
+    "do not invent facts. Write in the same language as the source text (Thai source -> Thai script).";
+
+  const prompt =
+    `Source type: ${sourceType}\n` +
+    `Source name: ${sourceName}\n\n` +
+    `Source text:\n${truncate(sourceText, 10000)}`;
+
+  const raw = await callOpenRouter(env, { system, prompt, maxTokens: 2500 });
+
+  let parsed;
+  try {
+    parsed = extractJSON(raw);
+  } catch (e) {
+    return json({ error: `Model did not return valid JSON: ${e.message}` }, 502);
+  }
+
+  const segments = Array.isArray(parsed.segments)
+    ? parsed.segments.filter((s) => typeof s === "string" && s.trim().length > 0).map((s) => s.trim())
+    : [];
+
+  if (segments.length === 0) {
+    return json({ error: "Model response had no usable script segments" }, 502);
+  }
+
+  return json({
+    title: typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim() : sourceName,
+    segments,
+  });
+}
+
 // ---------------------------------------------------------------------------
 
 export default {
@@ -423,6 +477,8 @@ export default {
         response = await handleProcess(request, env);
       } else if (request.method === "POST" && url.pathname === "/v1/extract") {
         response = await handleExtract(request, env);
+      } else if (request.method === "POST" && url.pathname === "/v1/podcast") {
+        response = await handlePodcast(request, env);
       } else {
         return json({ error: "Not found" }, 404);
       }

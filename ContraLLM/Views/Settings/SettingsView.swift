@@ -100,8 +100,12 @@ struct SettingsView: View {
                 }
 
                 Section("Voice") {
-                    Label("Voice: Contra (default)", systemImage: "waveform")
-                    Text("Speech-to-text and text-to-speech run through the same provider abstraction, so a production voice provider can be swapped in without UI changes.")
+                    NavigationLink {
+                        PodcastVoicePickerView()
+                    } label: {
+                        Label("Podcast narration voice", systemImage: "waveform")
+                    }
+                    Text("Speech recognition (mic) and podcast narration both run on-device via Apple's Speech and Speech Synthesis frameworks — Thai-preferred, free, no API key.")
                         .font(.system(size: 12))
                         .foregroundStyle(ContraTheme.textSecondary)
                 }

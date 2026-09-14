@@ -12,6 +12,7 @@ struct PodcastView: View {
     @StateObject private var viewModel: PodcastViewModel
     @StateObject private var chatViewModel: ChatViewModel
     @State private var draftText = ""
+    @State private var showVoicePicker = false
 
     init(workspace: Workspace) {
         self.workspace = workspace
@@ -47,6 +48,19 @@ struct PodcastView: View {
         .onAppear {
             viewModel.generateIfNeeded()
             chatViewModel.attachModelContext(modelContext)
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showVoicePicker = true
+                } label: {
+                    Image(systemName: "person.wave.2")
+                }
+                .accessibilityLabel("Choose narration voice")
+            }
+        }
+        .sheet(isPresented: $showVoicePicker) {
+            PodcastVoicePickerView()
         }
     }
 
@@ -139,6 +153,10 @@ struct PodcastView: View {
                 }
                 .foregroundStyle(ContraTheme.textPrimary)
 
+                if let current = viewModel.currentLine(in: episode) {
+                    liveCaption(current)
+                }
+
                 transcript(for: episode)
                     .padding(.top, 8)
             }
@@ -146,23 +164,42 @@ struct PodcastView: View {
         }
     }
 
+    /// A single, clear, synced caption — updates as playback moves through
+    /// the transcript's timestamps, like real podcast-app subtitles.
+    private func liveCaption(_ line: TranscriptLine) -> some View {
+        Text(line.text)
+            .font(.system(size: 17, weight: .medium))
+            .foregroundStyle(ContraTheme.textPrimary)
+            .multilineTextAlignment(.center)
+            .lineSpacing(3)
+            .padding(.horizontal, 28)
+            .padding(.vertical, 4)
+            .frame(minHeight: 70)
+            .animation(.easeInOut(duration: 0.2), value: line.id)
+    }
+
     private func transcript(for episode: PodcastEpisode) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Transcript")
+            Text("Full transcript")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(ContraTheme.textPrimary)
                 .padding(.horizontal, 16)
 
             VStack(alignment: .leading, spacing: 14) {
                 ForEach(episode.transcript) { line in
+                    let isActive = viewModel.currentLine(in: episode)?.id == line.id
                     VStack(alignment: .leading, spacing: 3) {
                         Text(line.speakerName)
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(ContraTheme.accent)
                         Text(line.text)
-                            .font(.system(size: 14))
-                            .foregroundStyle(ContraTheme.textPrimary)
+                            .font(.system(size: 14, weight: isActive ? .semibold : .regular))
+                            .foregroundStyle(isActive ? ContraTheme.textPrimary : ContraTheme.textSecondary)
                     }
+                    .padding(.horizontal, isActive ? 8 : 0)
+                    .padding(.vertical, isActive ? 6 : 0)
+                    .background(isActive ? ContraTheme.accentSoft : .clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
             }
             .padding(16)
