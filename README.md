@@ -92,9 +92,9 @@ point the app at a local or staging backend for testing.
 
 ## Real AI backend (`backend/`)
 
-`backend/worker` is a small Cloudflare Worker that proxies the app to Google
-Gemini — the one real, non-mock `AIChatService`/`DocumentProcessingService`
-backend. It holds the Gemini API key as a Cloudflare secret; the app never
+`backend/worker` is a small Cloudflare Worker that proxies the app to
+OpenRouter — the one real, non-mock `AIChatService`/`DocumentProcessingService`
+backend. It holds the OpenRouter API key as a Cloudflare secret; the app never
 sees it. One deployment can be shared by a group — each person gets their
 own access code with its own daily request limit, so nobody can burn
 through everyone else's quota (or your bill).
@@ -105,7 +105,7 @@ for the full setup, then in the app go to **Settings → AI**, turn off
 URL and your own access code.
 
 With it enabled: `generateWorkspaceTitle` and chat (`AIChatService`) call
-real Gemini, and `DocumentProcessingService` extracts real text — PDFKit for
+real AI (via OpenRouter), and `DocumentProcessingService` extracts real text — PDFKit for
 PDF/text files, a lightweight HTML strip for websites — then asks the
 backend to turn that into grounded notebook blocks and slides. YouTube,
 Google Docs, and audio sources don't have an extraction path wired up yet

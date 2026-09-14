@@ -1,8 +1,8 @@
 /**
- * Contra LLM backend — a thin proxy between the iOS app and Google Gemini.
+ * Contra LLM backend — a thin proxy between the iOS app and OpenRouter.
  *
  * The app never embeds an AI provider API key. It calls this Worker, which
- * holds the real Gemini key as a Cloudflare secret and forwards a small,
+ * holds the real OpenRouter key as a Cloudflare secret and forwards a small,
  * purpose-built set of endpoints:
  *
  *   POST /v1/title    -> generate a short workspace title from a source
@@ -11,16 +11,16 @@
  *   GET  /health      -> liveness check
  *
  * Auth + per-user daily quota: each person gets their own access code (not
- * a Gemini key — just a random string you hand out). USER_TOKENS maps
+ * an OpenRouter key — just a random string you hand out). USER_TOKENS maps
  * each code to a label; DAILY_LIMIT caps how many AI requests that code can
  * make per UTC day, counted in the USAGE_KV KV namespace. This is a
- * best-effort guardrail — Gemini also has its own free-tier rate limits
- * that cap runaway cost on their end. See backend/README.md.
+ * best-effort guardrail on top of whatever spend limit you set on your
+ * OpenRouter account. See backend/README.md.
  *
  * Deploy: see backend/README.md
  */
 
-const GEMINI_URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -85,33 +85,35 @@ async function checkAndConsumeQuota(env, user) {
   return { allowed: true, remaining: limit - current - 1 };
 }
 
-async function callGemini(env, { system, prompt, maxTokens = 800 }) {
-  const model = env.MODEL || "gemini-2.0-flash";
-  const url = `${GEMINI_URL_BASE}/${model}:generateContent`;
+async function callOpenRouter(env, { system, prompt, maxTokens = 800 }) {
+  const model = env.MODEL || "mistralai/mistral-7b-instruct:free";
 
-  const res = await fetch(url, {
+  const res = await fetch(OPENROUTER_URL, {
     method: "POST",
     headers: {
-      "x-goog-api-key": env.GEMINI_API_KEY,
+      "authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
       "content-type": "application/json",
+      // OpenRouter asks for these but doesn't require them to work.
+      "HTTP-Referer": "https://github.com/plawanpawin-byte/ContraLLM",
+      "X-Title": "Contra LLM",
     },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: maxTokens },
+      model,
+      max_tokens: maxTokens,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: prompt },
+      ],
     }),
   });
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Gemini API error ${res.status}: ${text.slice(0, 300)}`);
+    throw new Error(`OpenRouter API error ${res.status}: ${text.slice(0, 300)}`);
   }
 
   const data = await res.json();
-  const text = (data.candidates?.[0]?.content?.parts || [])
-    .map((part) => part.text || "")
-    .join("\n")
-    .trim();
+  const text = (data.choices?.[0]?.message?.content || "").trim();
   return text;
 }
 
@@ -145,7 +147,7 @@ async function handleTitle(request, env) {
     (sourceText ? `Source excerpt:\n${truncate(sourceText, 3000)}\n\n` : "") +
     "Give a short, specific workspace title for this source.";
 
-  const raw = await callGemini(env, { system, prompt, maxTokens: 40 });
+  const raw = await callOpenRouter(env, { system, prompt, maxTokens: 40 });
   const title = raw.replace(/^["']|["']$/g, "").split("\n")[0].trim();
   return json({ title: title || sourceName || "Untitled" });
 }
@@ -180,7 +182,7 @@ async function handleChat(request, env) {
     (historyText ? `Conversation so far:\n${historyText}\n\n` : "") +
     `User's new message: ${message}`;
 
-  const raw = await callGemini(env, { system, prompt, maxTokens: 700 });
+  const raw = await callOpenRouter(env, { system, prompt, maxTokens: 700 });
 
   let parsed;
   try {
@@ -225,7 +227,7 @@ async function handleProcess(request, env) {
     `Source name: ${sourceName}\n\n` +
     `Source text:\n${truncate(sourceText, 12000)}`;
 
-  const raw = await callGemini(env, { system, prompt, maxTokens: 3000 });
+  const raw = await callOpenRouter(env, { system, prompt, maxTokens: 3000 });
 
   let parsed;
   try {

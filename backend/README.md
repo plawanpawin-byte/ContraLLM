@@ -1,20 +1,18 @@
 # Contra LLM backend
 
-A tiny Cloudflare Worker that proxies the iOS app to Google Gemini. It's the
+A tiny Cloudflare Worker that proxies the iOS app to OpenRouter. It's the
 only place an AI provider API key ever lives — the app itself never embeds
-one. Each person you share the app with gets their own **access code**
-(just a random string — not a Gemini key) with its own daily quota, so one
-deployment can be shared by a small group safely.
+one. Each person who uses the app gets their own **access code** (just a
+random string — not an OpenRouter key) with its own daily quota.
 
 ```
-iPhone (ContraLLM, access code "a1b2...") → this Worker → Gemini API
+iPhone (ContraLLM, access code "a1b2...") → this Worker → OpenRouter → model
 ```
 
 ## Deploy (10 minutes, free tier)
 
 Requires a free [Cloudflare](https://dash.cloudflare.com/sign-up) account
-and a [Gemini API key](https://aistudio.google.com/apikey) (Google AI
-Studio — has a genuinely free tier, not just a trial credit).
+and an [OpenRouter](https://openrouter.ai/keys) API key.
 
 ```bash
 cd backend/worker
@@ -22,14 +20,17 @@ npm install -g wrangler   # one-time
 wrangler login             # opens a browser to authorize
 ```
 
-### 1. Get a Gemini API key
+### 1. Get an OpenRouter API key
 
-Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey) →
-**Create API key**. The free tier has its own request-per-minute /
-request-per-day caps set by Google, which is a real backstop against
-runaway cost on top of the app-side daily limit below. If you outgrow the
-free tier, Google Cloud Console lets you set a billing budget alert the
-same way Anthropic does.
+Go to [openrouter.ai/keys](https://openrouter.ai/keys) → **Create Key**.
+OpenRouter lets you set a **credit limit on the key itself** (Settings →
+Keys → edit the key's limit) — set that to a small number, e.g. $1-2, as a
+hard backstop. Also pick a model tagged **`:free`** at
+[openrouter.ai/models?max_price=0](https://openrouter.ai/models?max_price=0)
+to keep real cost at $0 — the default in `wrangler.toml`
+(`mistralai/mistral-7b-instruct:free`) is one, but free model availability
+changes over time, so check that page if it ever stops responding and swap
+`MODEL` for a current one.
 
 ### 2. Create the usage-tracking KV namespace
 
@@ -39,38 +40,33 @@ wrangler kv namespace create USAGE_KV
 
 Copy the `id` it prints into `wrangler.toml`, replacing the placeholder.
 
-### 3. Set your Gemini key
+### 3. Set your OpenRouter key
 
 ```bash
-wrangler secret put GEMINI_API_KEY
-# paste your Gemini API key when prompted
+wrangler secret put OPENROUTER_API_KEY
+# paste your OpenRouter API key when prompted
 ```
 
-### 4. Create an access code for each person
+### 4. Create your access code
 
-Generate one random code per person (10 people = 10 codes):
+Even for one person, an access code is worth having — it's the only thing
+standing between "just me" and "anyone who finds the Worker URL." Generate
+one:
 
 ```bash
 openssl rand -hex 8
 ```
 
-Run that 10 times, then build one JSON object mapping code → name, e.g.:
-
-```json
-{"3f9a1b2c4d5e6f70": "Nueng", "8a7b6c5d4e3f2a10": "Ploy", "...": "..."}
-```
-
 ```bash
 wrangler secret put USER_TOKENS
-# paste the JSON object above when prompted (all on one line)
+# paste: {"<the code you generated>": "me"}
 ```
 
-Keep your own copy of which code belongs to which person somewhere safe —
-the Worker only stores code → label, there's no way to look it up later
-except by re-running `wrangler secret put` with an updated list.
+(If you're adding more people later, it's the same JSON object with more
+entries — see the comment in `wrangler.toml`.)
 
-Adjust `DAILY_LIMIT` in `wrangler.toml` if you want a different per-person
-cap than the default (10/day).
+`DAILY_LIMIT` in `wrangler.toml` defaults to 100/day, generous for one
+person. Lower it if you want a tighter guardrail.
 
 ### 5. Deploy
 
@@ -84,16 +80,13 @@ Wrangler prints your Worker's URL, e.g.:
 https://contrallm-backend.<your-subdomain>.workers.dev
 ```
 
-## Give each person their code
+## Turn it on in the app
 
-In the app: **Settings → AI**
+**Settings → AI**
 1. Turn **off** "Use demo AI provider"
 2. Turn on **Developer Mode**
 3. Paste the Worker URL as the **Backend URL**
-4. Paste **their own** access code as the **Backend secret**
-
-Two different people must use two different codes — if everyone shares one
-code, they all draw from the same daily quota.
+4. Paste your access code as the **Backend secret**
 
 ## Endpoints
 
@@ -110,22 +103,19 @@ Every POST call requires `Authorization: Bearer <access code>` once
 
 ## Cost & safety notes
 
-- Model defaults to `gemini-2.0-flash` (fast, cheap, generous free tier) —
-  change via `MODEL` in `wrangler.toml` to any Gemini model name.
-- Cloudflare Workers + KV free tier is generous (100k requests/day, 100k KV
-  reads/day) — 10 people at 10 requests/day each won't come close.
-- Gemini's free tier itself caps requests per minute/day — check current
-  limits at [ai.google.dev/pricing](https://ai.google.dev/pricing). The
-  per-code `DAILY_LIMIT` here is an extra layer on top so one person can't
-  use up everyone else's share of that shared free-tier quota.
-- If a code's holder hits their daily limit, only they are blocked (with a
-  clear error) — everyone else is unaffected.
+- Use a `:free`-tagged model (see step 1) and real cost is $0.
+- If you switch to a paid model, **the credit limit you set on the
+  OpenRouter key itself (step 1) is the real backstop** — once hit, the key
+  simply stops working. The app-side `DAILY_LIMIT` is a courtesy guardrail
+  on top, not a substitute for that.
+- Cloudflare Workers + KV free tier is generous (100k requests/day) — far
+  more than one person will ever use.
 
 ## Local test
 
 ```bash
 curl -X POST https://<your-worker>.workers.dev/v1/chat \
   -H "content-type: application/json" \
-  -H "authorization: Bearer <one of the access codes>" \
+  -H "authorization: Bearer <your access code>" \
   -d '{"workspaceTitle":"Test","sourceName":"test.txt","sourceText":"The sky is blue because of Rayleigh scattering.","message":"why is the sky blue?"}'
 ```
