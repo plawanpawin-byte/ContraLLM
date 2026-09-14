@@ -37,7 +37,7 @@ struct SettingsView: View {
                                     configStore.configuration.baseURL = url
                                 }
                             }
-                        SecureField("Backend secret (optional)", text: $sharedSecret)
+                        SecureField("Your access code (from whoever set up the backend)", text: $sharedSecret)
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
                             .onSubmit {
@@ -46,7 +46,7 @@ struct SettingsView: View {
                         Text("Current: \(configStore.configuration.baseURL.absoluteString)")
                             .font(.system(size: 12))
                             .foregroundStyle(ContraTheme.textTertiary)
-                        Text("See backend/README.md to deploy your own backend and get this URL.")
+                        Text("Each person needs their own access code — it has its own daily limit. See backend/README.md.")
                             .font(.system(size: 12))
                             .foregroundStyle(ContraTheme.textTertiary)
                     }

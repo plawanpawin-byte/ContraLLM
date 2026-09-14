@@ -95,12 +95,15 @@ point the app at a local or staging backend for testing.
 `backend/worker` is a small Cloudflare Worker that proxies the app to
 Anthropic — the one real, non-mock `AIChatService`/`DocumentProcessingService`
 backend. It holds the Anthropic API key as a Cloudflare secret; the app never
-sees it. One deployment can be shared by everyone using the app.
+sees it. One deployment can be shared by a group — each person gets their
+own access code with its own daily request limit, so nobody can burn
+through everyone else's quota (or your bill).
 
 **Deploy it and turn on real AI:** see [`backend/README.md`](backend/README.md)
-for the 5-minute setup, then in the app go to **Settings → AI**, turn off
-"Use demo AI provider", turn on Developer Mode, and paste in your Worker's
-URL (and shared secret, if you set one).
+for the full setup (including setting a hard spend cap on Anthropic — do
+that part first), then in the app go to **Settings → AI**, turn off
+"Use demo AI provider", turn on Developer Mode, and paste in the Worker's
+URL and your own access code.
 
 With it enabled: `generateWorkspaceTitle` and chat (`AIChatService`) call
 real Claude, and `DocumentProcessingService` extracts real text — PDFKit for

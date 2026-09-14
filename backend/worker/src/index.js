@@ -10,6 +10,13 @@
  *   POST /v1/process  -> turn extracted source text into notebook + slides
  *   GET  /health      -> liveness check
  *
+ * Auth + per-user daily quota: each person gets their own access code (not
+ * an Anthropic key — just a random string you hand out). USER_TOKENS maps
+ * each code to a label; DAILY_LIMIT caps how many AI requests that code can
+ * make per UTC day, counted in the USAGE_KV KV namespace. This is a
+ * best-effort guardrail — the real spending cap is the one you set on your
+ * Anthropic API key at console.anthropic.com. See backend/README.md.
+ *
  * Deploy: see backend/README.md
  */
 
@@ -29,15 +36,54 @@ function json(data, status = 200) {
   });
 }
 
-function unauthorized() {
-  return json({ error: "Unauthorized" }, 401);
+function unauthorized(message = "Unauthorized") {
+  return json({ error: message }, 401);
 }
 
-function checkAuth(request, env) {
-  if (!env.APP_SHARED_SECRET) return true; // open mode, no secret configured
+function parseUserTokens(env) {
+  if (!env.USER_TOKENS) return null;
+  try {
+    return JSON.parse(env.USER_TOKENS); // { "<token>": "<label>", ... }
+  } catch {
+    return null;
+  }
+}
+
+/** Resolves the caller's access code from the Authorization header against
+ * USER_TOKENS. Returns { token, label } on success, null if no code was
+ * configured (open mode) — the caller still needs to check `unauthorizedReason`
+ * separately when a code WAS required but didn't match. */
+function resolveUser(request, env) {
+  const tokens = parseUserTokens(env);
+  if (!tokens) return { open: true };
+
   const header = request.headers.get("Authorization") || "";
-  const expected = `Bearer ${env.APP_SHARED_SECRET}`;
-  return header === expected;
+  const provided = header.startsWith("Bearer ") ? header.slice(7) : "";
+  if (!provided || !(provided in tokens)) return null;
+
+  return { open: false, token: provided, label: tokens[provided] };
+}
+
+/** Checks and increments today's usage count for a user's access code.
+ * Returns { allowed, remaining }. Counting is best-effort (not perfectly
+ * atomic under heavy concurrent use), which is fine for a small shared
+ * group — it's a courtesy guardrail, not a hard financial backstop. */
+async function checkAndConsumeQuota(env, user) {
+  if (user.open || !env.USAGE_KV) {
+    return { allowed: true, remaining: null }; // no KV bound = no metering
+  }
+
+  const limit = Number(env.DAILY_LIMIT || 20);
+  const day = new Date().toISOString().slice(0, 10); // UTC YYYY-MM-DD
+  const key = `usage:${user.token}:${day}`;
+
+  const current = Number((await env.USAGE_KV.get(key)) || "0");
+  if (current >= limit) {
+    return { allowed: false, remaining: 0 };
+  }
+
+  await env.USAGE_KV.put(key, String(current + 1), { expirationTtl: 172800 });
+  return { allowed: true, remaining: limit - current - 1 };
 }
 
 async function callClaude(env, { system, prompt, maxTokens = 800 }) {
@@ -232,24 +278,35 @@ export default {
       return json({ ok: true });
     }
 
-    if (!checkAuth(request, env)) {
-      return unauthorized();
+    const user = resolveUser(request, env);
+    if (!user) {
+      return unauthorized("Unknown or missing access code.");
     }
 
+    const quota = await checkAndConsumeQuota(env, user);
+    if (!quota.allowed) {
+      return json(
+        { error: "Daily limit reached for this access code. Try again tomorrow (UTC)." },
+        429
+      );
+    }
+    const extraHeaders = quota.remaining !== null ? { "X-Quota-Remaining": String(quota.remaining) } : {};
+
     try {
+      let response;
       if (request.method === "POST" && url.pathname === "/v1/title") {
-        return await handleTitle(request, env);
+        response = await handleTitle(request, env);
+      } else if (request.method === "POST" && url.pathname === "/v1/chat") {
+        response = await handleChat(request, env);
+      } else if (request.method === "POST" && url.pathname === "/v1/process") {
+        response = await handleProcess(request, env);
+      } else {
+        return json({ error: "Not found" }, 404);
       }
-      if (request.method === "POST" && url.pathname === "/v1/chat") {
-        return await handleChat(request, env);
-      }
-      if (request.method === "POST" && url.pathname === "/v1/process") {
-        return await handleProcess(request, env);
-      }
+      for (const [k, v] of Object.entries(extraHeaders)) response.headers.set(k, v);
+      return response;
     } catch (err) {
       return json({ error: err.message || "Internal error" }, 500);
     }
-
-    return json({ error: "Not found" }, 404);
   },
 };

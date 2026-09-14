@@ -3,14 +3,23 @@ main = "src/index.js"
 compatibility_date = "2024-11-01"
 
 [vars]
-# Which Anthropic model to call. Override with `wrangler secret put MODEL`
-# or by editing this value — it's not sensitive, so a plain var is fine.
+# Which Anthropic model to call. Not sensitive, plain var is fine.
 MODEL = "claude-haiku-4-5-20251001"
+# Max AI requests per access code per UTC day. Only enforced if USER_TOKENS
+# is set and USAGE_KV is bound (see below).
+DAILY_LIMIT = "10"
+
+# KV namespace used to count each access code's daily usage. Create it with:
+#   wrangler kv namespace create USAGE_KV
+# then paste the id it prints below.
+[[kv_namespaces]]
+binding = "USAGE_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
 
 # Secrets (never put these here — set them with `wrangler secret put <NAME>`):
 #   ANTHROPIC_API_KEY   required. Your Anthropic API key. Never leaves this Worker.
-#   APP_SHARED_SECRET   optional. If set, requests must send it as
-#                       `Authorization: Bearer <value>` or they're rejected.
-#                       Without it, anyone who has your Worker URL can spend
-#                       your Anthropic budget — set this before sharing the
-#                       app with anyone else.
+#   USER_TOKENS         optional but recommended. A JSON object mapping each
+#                       person's access code to a label, e.g.:
+#                         {"a1b2c3...": "Nueng", "d4e5f6...": "Ploy"}
+#                       Without this, the Worker is open to anyone with the URL.
+#                       Generate each code with: openssl rand -hex 8
