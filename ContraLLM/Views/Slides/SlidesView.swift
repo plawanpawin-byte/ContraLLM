@@ -41,12 +41,7 @@ struct SlidesView: View {
 
                 pageIndicator
 
-                if let last = chatViewModel.messages.last, last.role == .assistant {
-                    AIResponseBanner(message: last) {
-                        chatViewModel.messages.removeAll { $0.id == last.id }
-                    }
-                    .padding(.bottom, 8)
-                }
+                AskAIThread(messages: chatViewModel.messages) { chatViewModel.send($0) }
 
                 AIPromptBar(
                     text: $draftText,
