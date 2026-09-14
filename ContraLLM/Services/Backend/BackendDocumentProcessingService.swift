@@ -2,19 +2,25 @@
 //  BackendDocumentProcessingService.swift
 //  ContraLLM
 //
-//  Real DocumentProcessingService implementation. Extracts plain text
-//  on-device where possible (PDF via PDFKit, plain text files, a lightweight
-//  HTML strip for websites), then asks the Contra backend to turn that text
-//  into notebook blocks + slides grounded in the actual source.
-//
-//  YouTube, Google Docs, and audio sources don't have a reliable on-device
-//  extraction path yet (transcript fetch / speech-to-text), so those fall
-//  back to the same demo content MockDocumentProcessingService uses — real
-//  extraction for those is a natural next step, not wired yet.
+//  Real DocumentProcessingService implementation. Extracts plain text for
+//  every source type, then asks the Contra backend to turn that text into
+//  notebook blocks + slides grounded in the actual source:
+//    - PDF: PDFKit, on-device
+//    - Text/document files: read directly, on-device
+//    - Website: fetch + strip HTML, on-device
+//    - YouTube: fetch the watch page + captions track, on-device (this must
+//      run on-device rather than on the backend — YouTube blocks Cloudflare
+//      Workers' IP ranges for this, but not normal client requests)
+//    - Google Docs: backend fetches the doc's public text export
+//      (docs.google.com/.../export?format=txt) — requires the doc be shared
+//      as "Anyone with the link can view"
+//    - Audio (mp3/wav/m4a): on-device Apple Speech transcription of the
+//      imported file (prefers Thai, see RealSpeechToTextService)
 //
 
 import Foundation
 import PDFKit
+import Speech
 
 final class BackendDocumentProcessingService: DocumentProcessingService {
     private let client: BackendAPIClient
@@ -98,10 +104,125 @@ final class BackendDocumentProcessingService: DocumentProcessingService {
             guard let url = source.remoteURL else { return nil }
             return await fetchAndStripHTML(url)
 
-        case .youtube, .googleDocs, .audio:
-            // Needs transcript fetch / speech-to-text — not wired yet.
+        case .youtube:
+            guard let url = source.remoteURL else { return nil }
+            return await fetchYouTubeTranscript(url)
+
+        case .googleDocs:
+            guard let url = source.remoteURL else { return nil }
+            return await fetchGoogleDocsText(url)
+
+        case .audio:
+            guard let url = source.localURL else { return nil }
+            return await transcribeAudioFile(url)
+        }
+    }
+
+    // MARK: - YouTube (on-device — Cloudflare Workers get blocked by YouTube for this)
+
+    private func fetchYouTubeTranscript(_ url: URL) async -> String? {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        request.setValue(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+            forHTTPHeaderField: "User-Agent"
+        )
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+              let html = String(data: data, encoding: .utf8) else {
             return nil
         }
+
+        guard let tracksRange = html.range(of: "\"captionTracks\":") else { return nil }
+        let afterKey = html[tracksRange.upperBound...]
+        guard let arrayEnd = afterKey.range(of: "]") else { return nil }
+        let arrayJSON = String(afterKey[afterKey.startIndex...arrayEnd.lowerBound])
+
+        guard let jsonData = arrayJSON.data(using: .utf8),
+              let tracks = try? JSONSerialization.jsonObject(with: jsonData) as? [[String: Any]],
+              !tracks.isEmpty else {
+            return nil
+        }
+
+        let preferred = tracks.first { ($0["languageCode"] as? String) == "th" }
+            ?? tracks.first { ($0["languageCode"] as? String)?.hasPrefix("en") == true }
+            ?? tracks[0]
+
+        guard let baseURLString = preferred["baseUrl"] as? String,
+              let captionURL = URL(string: baseURLString) else {
+            return nil
+        }
+
+        guard let (captionData, captionResponse) = try? await URLSession.shared.data(from: captionURL),
+              let captionHTTP = captionResponse as? HTTPURLResponse, (200..<300).contains(captionHTTP.statusCode),
+              let xml = String(data: captionData, encoding: .utf8) else {
+            return nil
+        }
+
+        let lines = xml.matches(of: /<text[^>]*>([\s\S]*?)<\/text>/).map { match -> String in
+            let raw = String(match.1)
+            let stripped = raw.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            return decodeHTMLEntities(stripped)
+        }
+        let transcript = lines.joined(separator: " ")
+        return transcript.isEmpty ? nil : normalized(transcript)
+    }
+
+    private func decodeHTMLEntities(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+    }
+
+    // MARK: - Google Docs (via backend — plain doc export isn't blocked like YouTube is)
+
+    private func fetchGoogleDocsText(_ url: URL) async -> String? {
+        struct Req: Encodable { let sourceType: String; let sourceURL: String }
+        struct Res: Decodable { let sourceText: String? }
+        guard let res: Res = try? await client.post(
+            path: "/v1/extract",
+            body: Req(sourceType: "googleDocs", sourceURL: url.absoluteString),
+            timeout: 30
+        ) else { return nil }
+        return res.sourceText.map(normalized)
+    }
+
+    // MARK: - Audio (on-device Apple Speech transcription)
+
+    private func transcribeAudioFile(_ url: URL) async -> String? {
+        guard let recognizer = Self.preferredRecognizer(), recognizer.isAvailable else { return nil }
+
+        let authorized = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            SFSpeechRecognizer.requestAuthorization { status in
+                continuation.resume(returning: status == .authorized)
+            }
+        }
+        guard authorized else { return nil }
+
+        let request = SFSpeechURLRecognitionRequest(url: url)
+        return await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
+            recognizer.recognitionTask(with: request) { result, error in
+                guard error == nil else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                guard let result, result.isFinal else { return }
+                continuation.resume(returning: self.normalized(result.bestTranscription.formattedString))
+            }
+        }
+    }
+
+    private static func preferredRecognizer() -> SFSpeechRecognizer? {
+        if let thai = SFSpeechRecognizer(locale: Locale(identifier: "th-TH")), thai.isAvailable {
+            return thai
+        }
+        if let device = SFSpeechRecognizer(locale: Locale.current), device.isAvailable {
+            return device
+        }
+        return SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     }
 
     private func fetchAndStripHTML(_ url: URL) async -> String? {

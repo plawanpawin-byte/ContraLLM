@@ -4,9 +4,11 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct NotebookView: View {
     let workspace: Workspace
+    @Environment(\.modelContext) private var modelContext
     @State private var blocks: [NotebookBlock] = []
     @StateObject private var chatViewModel: ChatViewModel
     @State private var draftText = ""
@@ -62,6 +64,7 @@ struct NotebookView: View {
             if blocks.isEmpty, let data = workspace.notebookData {
                 blocks = (try? JSONDecoder().decode([NotebookBlock].self, from: data)) ?? []
             }
+            chatViewModel.attachModelContext(modelContext)
         }
     }
 }

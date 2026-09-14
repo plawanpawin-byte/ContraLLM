@@ -4,9 +4,11 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct PodcastView: View {
     let workspace: Workspace
+    @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel: PodcastViewModel
     @StateObject private var chatViewModel: ChatViewModel
     @State private var draftText = ""
@@ -42,7 +44,10 @@ struct PodcastView: View {
         .background(ContraTheme.background.ignoresSafeArea())
         .navigationTitle("Podcast")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { viewModel.generateIfNeeded() }
+        .onAppear {
+            viewModel.generateIfNeeded()
+            chatViewModel.attachModelContext(modelContext)
+        }
     }
 
     @ViewBuilder

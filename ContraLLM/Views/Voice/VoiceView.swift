@@ -4,9 +4,11 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct VoiceView: View {
     let workspace: Workspace
+    @Environment(\.modelContext) private var modelContext
     @StateObject private var chatViewModel: ChatViewModel
     @StateObject private var speechViewModel = VoiceSpeechViewModel()
     @StateObject private var speaker = SpeechSpeaker()
@@ -78,6 +80,7 @@ struct VoiceView: View {
         .background(ContraTheme.background.ignoresSafeArea())
         .navigationTitle(workspace.title)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { chatViewModel.attachModelContext(modelContext) }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {

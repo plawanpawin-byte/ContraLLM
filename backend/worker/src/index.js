@@ -130,6 +130,113 @@ function truncate(text, maxChars) {
   return text.length > maxChars ? text.slice(0, maxChars) + "\n…(truncated)" : text;
 }
 
+function decodeHTMLEntities(text) {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)));
+}
+
+function stripTags(html) {
+  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// ---------------------------------------------------------------------------
+// Server-side source extraction — used for source types a device can't
+// reliably fetch/parse itself (YouTube captions, Google Docs export).
+// Website HTML stripping happens on-device (see BackendDocumentProcessingService);
+// this mirrors it here as a fallback for anything else.
+// ---------------------------------------------------------------------------
+
+function extractYouTubeVideoID(url) {
+  const patterns = [/[?&]v=([\w-]{11})/, /youtu\.be\/([\w-]{11})/, /\/embed\/([\w-]{11})/, /\/shorts\/([\w-]{11})/];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+async function extractYouTubeTranscript(url) {
+  const videoID = extractYouTubeVideoID(url);
+  if (!videoID) throw new Error("Couldn't find a YouTube video ID in that URL.");
+
+  const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoID}`, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+      "Accept-Language": "th,en;q=0.9",
+    },
+  });
+  if (!pageRes.ok) throw new Error(`Couldn't load the YouTube page (${pageRes.status}).`);
+  const html = await pageRes.text();
+
+  const tracksMatch = html.match(/"captionTracks":(\[.*?\])/);
+  if (!tracksMatch) throw new Error("This video doesn't have captions available.");
+
+  let tracks;
+  try {
+    tracks = JSON.parse(tracksMatch[1]);
+  } catch {
+    throw new Error("Couldn't read this video's caption list.");
+  }
+  if (!Array.isArray(tracks) || tracks.length === 0) {
+    throw new Error("This video doesn't have captions available.");
+  }
+
+  const track =
+    tracks.find((t) => t.languageCode === "th") ||
+    tracks.find((t) => t.languageCode?.startsWith("en")) ||
+    tracks[0];
+
+  const captionURL = track.baseUrl.replace(/\\u0026/g, "&");
+  const captionRes = await fetch(captionURL);
+  if (!captionRes.ok) throw new Error("Couldn't download the captions.");
+  const captionXML = await captionRes.text();
+
+  const lines = [...captionXML.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)].map((m) =>
+    decodeHTMLEntities(stripTags(m[1]))
+  );
+  const transcript = lines.join(" ").replace(/\s+/g, " ").trim();
+  if (!transcript) throw new Error("Captions were empty.");
+  return transcript;
+}
+
+async function extractGoogleDocText(url) {
+  const match = url.match(/\/document\/d\/([\w-]+)/);
+  if (!match) throw new Error("Couldn't find a Google Docs document ID in that URL.");
+  const docID = match[1];
+
+  const res = await fetch(`https://docs.google.com/document/d/${docID}/export?format=txt`);
+  if (!res.ok) {
+    throw new Error("Couldn't read this doc — make sure it's shared as \"Anyone with the link can view\".");
+  }
+  const text = (await res.text()).trim();
+  if (!text) throw new Error("This doc appears to be empty.");
+  return text;
+}
+
+async function handleExtract(request, env) {
+  const { sourceType = "", sourceURL = "" } = await request.json();
+  if (!sourceURL) return json({ error: "sourceURL is required" }, 400);
+
+  try {
+    let sourceText;
+    if (sourceType === "youtube") {
+      sourceText = await extractYouTubeTranscript(sourceURL);
+    } else if (sourceType === "googleDocs") {
+      sourceText = await extractGoogleDocText(sourceURL);
+    } else {
+      return json({ error: `Unsupported sourceType for extraction: ${sourceType}` }, 400);
+    }
+    return json({ sourceText });
+  } catch (err) {
+    return json({ error: err.message || "Extraction failed" }, 502);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Route handlers
 // ---------------------------------------------------------------------------
@@ -314,6 +421,8 @@ export default {
         response = await handleChat(request, env);
       } else if (request.method === "POST" && url.pathname === "/v1/process") {
         response = await handleProcess(request, env);
+      } else if (request.method === "POST" && url.pathname === "/v1/extract") {
+        response = await handleExtract(request, env);
       } else {
         return json({ error: "Not found" }, 404);
       }

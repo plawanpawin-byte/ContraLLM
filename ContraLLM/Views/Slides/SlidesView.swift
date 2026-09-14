@@ -4,9 +4,11 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct SlidesView: View {
     let workspace: Workspace
+    @Environment(\.modelContext) private var modelContext
     @State private var slides: [Slide] = []
     @State private var currentIndex = 0
     @StateObject private var chatViewModel: ChatViewModel
@@ -67,6 +69,7 @@ struct SlidesView: View {
             if slides.isEmpty, let data = workspace.slidesData {
                 slides = (try? JSONDecoder().decode([Slide].self, from: data)) ?? []
             }
+            chatViewModel.attachModelContext(modelContext)
         }
     }
 
