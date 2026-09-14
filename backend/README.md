@@ -1,19 +1,20 @@
 # Contra LLM backend
 
-A tiny Cloudflare Worker that proxies the iOS app to Anthropic. It's the
+A tiny Cloudflare Worker that proxies the iOS app to Google Gemini. It's the
 only place an AI provider API key ever lives — the app itself never embeds
 one. Each person you share the app with gets their own **access code**
-(just a random string — not an Anthropic key) with its own daily quota, so
-one deployment can be shared by a small group safely.
+(just a random string — not a Gemini key) with its own daily quota, so one
+deployment can be shared by a small group safely.
 
 ```
-iPhone (ContraLLM, access code "a1b2...") → this Worker → Anthropic API
+iPhone (ContraLLM, access code "a1b2...") → this Worker → Gemini API
 ```
 
 ## Deploy (10 minutes, free tier)
 
 Requires a free [Cloudflare](https://dash.cloudflare.com/sign-up) account
-and an [Anthropic API key](https://console.anthropic.com/settings/keys).
+and a [Gemini API key](https://aistudio.google.com/apikey) (Google AI
+Studio — has a genuinely free tier, not just a trial credit).
 
 ```bash
 cd backend/worker
@@ -21,14 +22,14 @@ npm install -g wrangler   # one-time
 wrangler login             # opens a browser to authorize
 ```
 
-### 1. Set a spend limit on Anthropic first — do this before anything else
+### 1. Get a Gemini API key
 
-This is the **real** protection against a surprise bill, not the app-side
-daily limit below (that one is a courtesy guardrail, not a hard cap).
-
-Go to [console.anthropic.com](https://console.anthropic.com) →
-**Settings → Billing** → set a monthly spend limit (e.g. $10). Once hit, the
-API simply stops working until next month — it cannot go over.
+Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey) →
+**Create API key**. The free tier has its own request-per-minute /
+request-per-day caps set by Google, which is a real backstop against
+runaway cost on top of the app-side daily limit below. If you outgrow the
+free tier, Google Cloud Console lets you set a billing budget alert the
+same way Anthropic does.
 
 ### 2. Create the usage-tracking KV namespace
 
@@ -36,14 +37,13 @@ API simply stops working until next month — it cannot go over.
 wrangler kv namespace create USAGE_KV
 ```
 
-Copy the `id` it prints into `wrangler.toml`, replacing
-`REPLACE_WITH_KV_NAMESPACE_ID`.
+Copy the `id` it prints into `wrangler.toml`, replacing the placeholder.
 
-### 3. Set your Anthropic key
+### 3. Set your Gemini key
 
 ```bash
-wrangler secret put ANTHROPIC_API_KEY
-# paste your Anthropic API key when prompted
+wrangler secret put GEMINI_API_KEY
+# paste your Gemini API key when prompted
 ```
 
 ### 4. Create an access code for each person
@@ -110,14 +110,14 @@ Every POST call requires `Authorization: Bearer <access code>` once
 
 ## Cost & safety notes
 
-- Model defaults to `claude-haiku-4-5-20251001` (fast, cheap) — change via
-  `MODEL` in `wrangler.toml`.
+- Model defaults to `gemini-2.0-flash` (fast, cheap, generous free tier) —
+  change via `MODEL` in `wrangler.toml` to any Gemini model name.
 - Cloudflare Workers + KV free tier is generous (100k requests/day, 100k KV
   reads/day) — 10 people at 10 requests/day each won't come close.
-- **The Anthropic spend limit from step 1 is what actually caps your bill.**
-  The per-code `DAILY_LIMIT` just keeps any one person from burning through
-  everyone else's share — it's not perfectly race-proof under heavy
-  simultaneous use, by design (kept simple for a small shared group).
+- Gemini's free tier itself caps requests per minute/day — check current
+  limits at [ai.google.dev/pricing](https://ai.google.dev/pricing). The
+  per-code `DAILY_LIMIT` here is an extra layer on top so one person can't
+  use up everyone else's share of that shared free-tier quota.
 - If a code's holder hits their daily limit, only they are blocked (with a
   clear error) — everyone else is unaffected.
 

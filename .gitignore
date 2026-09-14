@@ -34,3 +34,7 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots
 fastlane/test_output
+
+# Cloudflare Worker local state
+backend/worker/.wrangler/
+backend/worker/node_modules/

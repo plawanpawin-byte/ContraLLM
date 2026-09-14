@@ -1,8 +1,8 @@
 /**
- * Contra LLM backend — a thin proxy between the iOS app and Anthropic.
+ * Contra LLM backend — a thin proxy between the iOS app and Google Gemini.
  *
  * The app never embeds an AI provider API key. It calls this Worker, which
- * holds the real Anthropic key as a Cloudflare secret and forwards a small,
+ * holds the real Gemini key as a Cloudflare secret and forwards a small,
  * purpose-built set of endpoints:
  *
  *   POST /v1/title    -> generate a short workspace title from a source
@@ -11,17 +11,16 @@
  *   GET  /health      -> liveness check
  *
  * Auth + per-user daily quota: each person gets their own access code (not
- * an Anthropic key — just a random string you hand out). USER_TOKENS maps
+ * a Gemini key — just a random string you hand out). USER_TOKENS maps
  * each code to a label; DAILY_LIMIT caps how many AI requests that code can
  * make per UTC day, counted in the USAGE_KV KV namespace. This is a
- * best-effort guardrail — the real spending cap is the one you set on your
- * Anthropic API key at console.anthropic.com. See backend/README.md.
+ * best-effort guardrail — Gemini also has its own free-tier rate limits
+ * that cap runaway cost on their end. See backend/README.md.
  *
  * Deploy: see backend/README.md
  */
 
-const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-const ANTHROPIC_VERSION = "2023-06-01";
+const GEMINI_URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -86,31 +85,31 @@ async function checkAndConsumeQuota(env, user) {
   return { allowed: true, remaining: limit - current - 1 };
 }
 
-async function callClaude(env, { system, prompt, maxTokens = 800 }) {
-  const res = await fetch(ANTHROPIC_URL, {
+async function callGemini(env, { system, prompt, maxTokens = 800 }) {
+  const model = env.MODEL || "gemini-2.0-flash";
+  const url = `${GEMINI_URL_BASE}/${model}:generateContent`;
+
+  const res = await fetch(url, {
     method: "POST",
     headers: {
-      "x-api-key": env.ANTHROPIC_API_KEY,
-      "anthropic-version": ANTHROPIC_VERSION,
+      "x-goog-api-key": env.GEMINI_API_KEY,
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: env.MODEL || "claude-haiku-4-5-20251001",
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: "user", content: prompt }],
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: maxTokens },
     }),
   });
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Anthropic API error ${res.status}: ${text.slice(0, 300)}`);
+    throw new Error(`Gemini API error ${res.status}: ${text.slice(0, 300)}`);
   }
 
   const data = await res.json();
-  const text = (data.content || [])
-    .filter((block) => block.type === "text")
-    .map((block) => block.text)
+  const text = (data.candidates?.[0]?.content?.parts || [])
+    .map((part) => part.text || "")
     .join("\n")
     .trim();
   return text;
@@ -146,7 +145,7 @@ async function handleTitle(request, env) {
     (sourceText ? `Source excerpt:\n${truncate(sourceText, 3000)}\n\n` : "") +
     "Give a short, specific workspace title for this source.";
 
-  const raw = await callClaude(env, { system, prompt, maxTokens: 40 });
+  const raw = await callGemini(env, { system, prompt, maxTokens: 40 });
   const title = raw.replace(/^["']|["']$/g, "").split("\n")[0].trim();
   return json({ title: title || sourceName || "Untitled" });
 }
@@ -181,7 +180,7 @@ async function handleChat(request, env) {
     (historyText ? `Conversation so far:\n${historyText}\n\n` : "") +
     `User's new message: ${message}`;
 
-  const raw = await callClaude(env, { system, prompt, maxTokens: 700 });
+  const raw = await callGemini(env, { system, prompt, maxTokens: 700 });
 
   let parsed;
   try {
@@ -226,7 +225,7 @@ async function handleProcess(request, env) {
     `Source name: ${sourceName}\n\n` +
     `Source text:\n${truncate(sourceText, 12000)}`;
 
-  const raw = await callClaude(env, { system, prompt, maxTokens: 3000 });
+  const raw = await callGemini(env, { system, prompt, maxTokens: 3000 });
 
   let parsed;
   try {
