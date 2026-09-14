@@ -11,7 +11,7 @@ import Foundation
 
 final class MockAIChatService: AIChatService {
 
-    func generateWorkspaceTitle(from source: SourceItem) async throws -> String {
+    func generateWorkspaceTitle(from source: SourceItem, sourceText: String?) async throws -> String {
         try await Task.sleep(nanoseconds: 400_000_000)
 
         let name = source.displayName

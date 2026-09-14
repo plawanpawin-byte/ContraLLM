@@ -11,7 +11,9 @@ import Foundation
 
 protocol AIChatService {
     func send(message: String, workspace: Workspace) async throws -> AIMessage
-    func generateWorkspaceTitle(from source: SourceItem) async throws -> String
+    /// sourceText, when available, lets the title reflect what the source is
+    /// actually about instead of just its filename/URL.
+    func generateWorkspaceTitle(from source: SourceItem, sourceText: String?) async throws -> String
 }
 
 enum AIServiceError: LocalizedError {

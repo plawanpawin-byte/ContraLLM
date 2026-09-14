@@ -18,13 +18,13 @@ final class BackendAIChatService: AIChatService {
         self.client = BackendAPIClient(configuration: configuration)
     }
 
-    func generateWorkspaceTitle(from source: SourceItem) async throws -> String {
+    func generateWorkspaceTitle(from source: SourceItem, sourceText: String?) async throws -> String {
         struct Req: Encodable { let sourceName: String; let sourceType: String; let sourceText: String? }
         struct Res: Decodable { let title: String }
 
         let res: Res = try await client.post(
             path: "/v1/title",
-            body: Req(sourceName: source.displayName, sourceType: source.type.rawValue, sourceText: nil)
+            body: Req(sourceName: source.displayName, sourceType: source.type.rawValue, sourceText: sourceText)
         )
         return res.title
     }

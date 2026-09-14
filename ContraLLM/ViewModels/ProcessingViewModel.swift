@@ -54,7 +54,7 @@ final class ProcessingViewModel: ObservableObject {
             let content = try await documentProcessingService.process(source: source)
             try await advance() // Extracting content
             try await advance() // Understanding key ideas
-            let title = try await aiChatService.generateWorkspaceTitle(from: source)
+            let title = try await aiChatService.generateWorkspaceTitle(from: source, sourceText: content.sourceText)
             try await advance() // Creating your workspace
 
             let workspace = Workspace(title: title, sourceDisplayName: source.displayName, sourceType: source.type)

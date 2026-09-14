@@ -20,7 +20,6 @@
 
 import Foundation
 import PDFKit
-import Speech
 
 final class BackendDocumentProcessingService: DocumentProcessingService {
     private let client: BackendAPIClient
@@ -193,36 +192,8 @@ final class BackendDocumentProcessingService: DocumentProcessingService {
     // MARK: - Audio (on-device Apple Speech transcription)
 
     private func transcribeAudioFile(_ url: URL) async -> String? {
-        guard let recognizer = Self.preferredRecognizer(), recognizer.isAvailable else { return nil }
-
-        let authorized = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status == .authorized)
-            }
-        }
-        guard authorized else { return nil }
-
-        let request = SFSpeechURLRecognitionRequest(url: url)
-        return await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
-            recognizer.recognitionTask(with: request) { result, error in
-                guard error == nil else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                guard let result, result.isFinal else { return }
-                continuation.resume(returning: self.normalized(result.bestTranscription.formattedString))
-            }
-        }
-    }
-
-    private static func preferredRecognizer() -> SFSpeechRecognizer? {
-        if let thai = SFSpeechRecognizer(locale: Locale(identifier: "th-TH")), thai.isAvailable {
-            return thai
-        }
-        if let device = SFSpeechRecognizer(locale: Locale.current), device.isAvailable {
-            return device
-        }
-        return SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+        guard let transcript = await AudioTranscriber.transcribe(fileAt: url) else { return nil }
+        return normalized(transcript)
     }
 
     private func fetchAndStripHTML(_ url: URL) async -> String? {

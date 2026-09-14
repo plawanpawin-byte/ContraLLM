@@ -28,6 +28,13 @@ final class Workspace {
     /// sources where extraction wasn't possible (e.g. YouTube, audio).
     var sourceTextData: Data?
 
+    /// Set only for workspaces created from the Voice tab's recorder (as
+    /// opposed to a Home-imported source) — the filename of the saved
+    /// recording under Application Support/Recordings. Used to tell voice
+    /// memos apart from regular workspaces in each tab's @Query.
+    var recordingFileName: String?
+    var recordingDurationSeconds: Double = 0
+
     var sourceText: String? {
         get { sourceTextData.flatMap { String(data: $0, encoding: .utf8) } }
         set { sourceTextData = newValue?.data(using: .utf8) }
@@ -37,18 +44,24 @@ final class Workspace {
         SourceType(rawValue: sourceTypeRaw) ?? .text
     }
 
+    var isVoiceRecording: Bool { recordingFileName != nil }
+
     init(
         id: UUID = UUID(),
         title: String,
         sourceDisplayName: String,
         sourceType: SourceType,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        recordingFileName: String? = nil,
+        recordingDurationSeconds: Double = 0
     ) {
         self.id = id
         self.title = title
         self.sourceDisplayName = sourceDisplayName
         self.sourceTypeRaw = sourceType.rawValue
         self.createdAt = createdAt
+        self.recordingFileName = recordingFileName
+        self.recordingDurationSeconds = recordingDurationSeconds
     }
 
     /// Which of the 4 learning formats currently have generated content.

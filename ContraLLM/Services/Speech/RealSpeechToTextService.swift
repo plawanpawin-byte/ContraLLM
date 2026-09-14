@@ -27,7 +27,7 @@ final class RealSpeechToTextService: NSObject, SpeechToTextService {
 
         try await requestPermissions()
 
-        let recognizer = Self.preferredRecognizer()
+        let recognizer = AudioTranscriber.preferredRecognizer()
         guard let recognizer, recognizer.isAvailable else {
             throw AIServiceError.invalidResponse
         }
@@ -73,17 +73,6 @@ final class RealSpeechToTextService: NSObject, SpeechToTextService {
         task = nil
 
         return latestTranscript
-    }
-
-    /// Prefers Thai, falls back to the device's current locale, then en-US.
-    private static func preferredRecognizer() -> SFSpeechRecognizer? {
-        if let thai = SFSpeechRecognizer(locale: Locale(identifier: "th-TH")), thai.isAvailable {
-            return thai
-        }
-        if let device = SFSpeechRecognizer(locale: Locale.current), device.isAvailable {
-            return device
-        }
-        return SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     }
 
     private func requestPermissions() async throws {

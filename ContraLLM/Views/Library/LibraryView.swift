@@ -7,7 +7,13 @@ import SwiftUI
 import SwiftData
 
 struct LibraryView: View {
-    @Query(sort: \Workspace.createdAt, order: .reverse) private var workspaces: [Workspace]
+    // Voice recordings (from the Voice tab's recorder) live in their own tab,
+    // not mixed in here.
+    @Query(
+        filter: #Predicate<Workspace> { $0.recordingFileName == nil },
+        sort: \Workspace.createdAt,
+        order: .reverse
+    ) private var workspaces: [Workspace]
 
     var body: some View {
         NavigationStack {
