@@ -34,8 +34,7 @@ struct NotebookView: View {
                             NotebookBlockView(block: block)
                         }
                     }
-                    .padding(20)
-                    .contraCard()
+                    .notebookPaper()
                     .padding(16)
                 }
             }

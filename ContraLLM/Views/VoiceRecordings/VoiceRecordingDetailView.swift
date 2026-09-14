@@ -31,14 +31,13 @@ struct VoiceRecordingDetailView: View {
                     if !blocks.isEmpty {
                         VStack(alignment: .leading, spacing: 16) {
                             Text("AI Summary")
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(NotebookPaper.handwritten(20, bold: true))
                                 .foregroundStyle(ContraTheme.textPrimary)
                             ForEach(blocks) { block in
                                 NotebookBlockView(block: block)
                             }
                         }
-                        .padding(20)
-                        .contraCard()
+                        .notebookPaper()
                     }
                 }
                 .padding(16)

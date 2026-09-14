@@ -2,7 +2,10 @@
 //  NotebookBlockView.swift
 //  ContraLLM
 //
-//  Renders a single NotebookBlock with visual treatment specific to its kind.
+//  Renders a single NotebookBlock with visual treatment specific to its
+//  kind — styled like a real handwritten notebook page: a handwriting
+//  system font for headings/annotations, and a highlighter-pen look for
+//  highlighted text, on top of NotebookPaper's ruled-paper background.
 //
 
 import SwiftUI
@@ -14,7 +17,7 @@ struct NotebookBlockView: View {
         switch block.kind {
         case .heading:
             Text(block.text)
-                .font(.system(size: 21, weight: .bold))
+                .font(NotebookPaper.handwritten(26, bold: true))
                 .foregroundStyle(ContraTheme.textPrimary)
                 .padding(.top, 6)
 
@@ -22,7 +25,7 @@ struct NotebookBlockView: View {
             styledText
                 .font(.system(size: 15))
                 .foregroundStyle(ContraTheme.textPrimary)
-                .lineSpacing(4)
+                .lineSpacing(6)
 
         case .keyIdea:
             HStack(alignment: .top, spacing: 10) {
@@ -31,18 +34,19 @@ struct NotebookBlockView: View {
                     .foregroundStyle(ContraTheme.accent)
                     .padding(.top, 2)
                 Text(block.text)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(NotebookPaper.handwritten(18, bold: true))
                     .foregroundStyle(ContraTheme.textPrimary)
             }
             .padding(14)
             .background(ContraTheme.accentSoft)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .rotationEffect(.degrees(-0.4))
 
         case .definition:
             VStack(alignment: .leading, spacing: 6) {
                 if let term = block.caption {
                     Text(term)
-                        .font(.system(size: 13, weight: .bold))
+                        .font(NotebookPaper.handwritten(20, bold: true))
                         .foregroundStyle(ContraTheme.accent)
                 }
                 Text(block.text)
@@ -50,10 +54,11 @@ struct NotebookBlockView: View {
                     .foregroundStyle(ContraTheme.textPrimary)
             }
             .padding(14)
-            .background(ContraTheme.surface)
+            .background(ContraTheme.surface.opacity(0.6))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(ContraTheme.border, lineWidth: 1)
+                    .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    .foregroundStyle(ContraTheme.border)
             )
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
@@ -62,18 +67,17 @@ struct NotebookBlockView: View {
                 Rectangle()
                     .fill(ContraTheme.accent)
                     .frame(width: 3)
-                Text(block.text)
-                    .font(.system(size: 16, weight: .medium).italic())
+                Text("\u{201C}\(block.text)\u{201D}")
+                    .font(NotebookPaper.handwritten(19))
                     .foregroundStyle(ContraTheme.textPrimary)
             }
             .padding(.vertical, 4)
 
         case .highlight:
             Text(block.text)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(ContraTheme.textPrimary)
-                .padding(.horizontal, 4)
-                .background(ContraTheme.accentSoft)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Color.black.opacity(0.85))
+                .highlighterMark()
 
         case .citation:
             HStack(spacing: 6) {
@@ -107,13 +111,13 @@ struct NotebookBlockView: View {
 
         case .importantPoint:
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "exclamationmark.circle.fill")
-                    .font(.system(size: 13))
-                    .foregroundStyle(ContraTheme.accent)
+                Image(systemName: "star.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.orange)
                     .padding(.top, 2)
                 Text(block.text)
-                    .font(.system(size: 14))
-                    .underline()
+                    .font(NotebookPaper.handwritten(16))
+                    .underline(true, pattern: .solid, color: ContraTheme.accent)
                     .foregroundStyle(ContraTheme.textPrimary)
             }
 
@@ -124,7 +128,7 @@ struct NotebookBlockView: View {
                     .foregroundStyle(ContraTheme.textSecondary)
                     .padding(.top, 2)
                 Text(block.text)
-                    .font(.system(size: 14).italic())
+                    .font(NotebookPaper.handwritten(16).italic())
                     .foregroundStyle(ContraTheme.textSecondary)
             }
 
@@ -134,7 +138,7 @@ struct NotebookBlockView: View {
                     Image(systemName: "sparkles")
                         .font(.system(size: 12))
                     Text("AI Summary")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(NotebookPaper.handwritten(15, bold: true))
                 }
                 .foregroundStyle(ContraTheme.accent)
 
@@ -153,7 +157,10 @@ struct NotebookBlockView: View {
     }
 
     /// Builds an AttributedString from the block's inline spans, applying
-    /// selective bold / underline / highlight / accent styling.
+    /// selective bold / underline / highlight / accent styling. A
+    /// `highlighted` span gets a highlighter-pen background via a
+    /// SwiftUI.Text background isn't possible per-run, so highlighted spans
+    /// render as their own highlighterMark()-wrapped Text below instead.
     private var styledText: Text {
         guard !block.spans.isEmpty else {
             return Text(block.text)
