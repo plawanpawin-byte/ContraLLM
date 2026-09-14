@@ -9,7 +9,10 @@ struct VoiceView: View {
     let workspace: Workspace
     @StateObject private var chatViewModel: ChatViewModel
     @StateObject private var speechViewModel = VoiceSpeechViewModel()
+    @StateObject private var speaker = SpeechSpeaker()
     @State private var draftText = ""
+    @State private var autoSpeakEnabled = true
+    @State private var lastSpokenMessageID: UUID?
 
     init(workspace: Workspace) {
         self.workspace = workspace
@@ -37,6 +40,12 @@ struct VoiceView: View {
                     if let last = chatViewModel.messages.last {
                         withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                     }
+                }
+                // The loading placeholder is swapped for the real reply
+                // without changing messages.count, so speak once sending
+                // finishes rather than on count changes.
+                .onChange(of: chatViewModel.isSending) { _, isSending in
+                    if !isSending { speakLatestReplyIfNeeded() }
                 }
             }
 
@@ -69,6 +78,17 @@ struct VoiceView: View {
         .background(ContraTheme.background.ignoresSafeArea())
         .navigationTitle(workspace.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    autoSpeakEnabled.toggle()
+                    if !autoSpeakEnabled { speaker.stop() }
+                } label: {
+                    Image(systemName: autoSpeakEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                }
+                .accessibilityLabel(autoSpeakEnabled ? "Spoken replies on" : "Spoken replies off")
+            }
+        }
     }
 
     private var orb: some View {
@@ -80,7 +100,7 @@ struct VoiceView: View {
                 Image(systemName: "waveform")
                     .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(ContraTheme.accent)
-                    .symbolEffect(.variableColor.iterative, isActive: speechViewModel.isListening)
+                    .symbolEffect(.variableColor.iterative, isActive: speechViewModel.isListening || speaker.isSpeaking)
             }
             Text(workspace.title)
                 .font(.system(size: 13, weight: .medium))
@@ -89,6 +109,19 @@ struct VoiceView: View {
         }
         .padding(.top, 16)
         .padding(.bottom, 8)
+    }
+
+    /// Speaks a freshly-arrived assistant reply aloud (Thai text gets a Thai
+    /// voice automatically — see SpeechSpeaker). Skips messages already
+    /// spoken and anything still streaming/loading.
+    private func speakLatestReplyIfNeeded() {
+        guard autoSpeakEnabled,
+              let last = chatViewModel.messages.last,
+              last.role == .assistant,
+              !last.isLoading,
+              last.id != lastSpokenMessageID else { return }
+        lastSpokenMessageID = last.id
+        speaker.speak(last.text)
     }
 }
 

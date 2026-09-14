@@ -140,7 +140,8 @@ async function handleTitle(request, env) {
   const system =
     "You generate short, specific titles for a research/learning workspace. " +
     "Reply with the title text ONLY — no quotes, no punctuation at the end, no explanation. " +
-    "Keep it under 8 words.";
+    "Keep it under 8 words. Write the title in the same language as the source " +
+    "name/excerpt (Thai in, Thai title out; English in, English title out).";
   const prompt =
     `Source type: ${sourceType}\n` +
     `Source name: ${sourceName}\n` +
@@ -170,10 +171,14 @@ async function handleChat(request, env) {
     "You are Contra, an AI research assistant embedded in a learning app. " +
     "You are discussing a specific source the user imported. Answer directly and concisely, " +
     "grounded in the provided source excerpt when possible. " +
+    "Always reply in the same language the user's new message is written in — " +
+    "if they write in Thai, answer entirely in Thai (natural, conversational Thai, " +
+    "not a translation); if English, answer in English. " +
     "Respond with STRICT JSON ONLY, matching exactly this shape, no markdown fences, no commentary:\n" +
     '{"text": "your answer, 1-4 sentences", "bullets": ["optional short bullet", ...up to 4], ' +
     '"followUps": ["a natural follow-up question", ...2-3 short ones]}\n' +
-    'Use "bullets" only when a list genuinely helps; otherwise use [].';
+    'Use "bullets" only when a list genuinely helps; otherwise use []. ' +
+    '"followUps" must also be in the same language as the reply.';
 
   const prompt =
     `Workspace: ${workspaceTitle}\n` +
@@ -220,7 +225,8 @@ async function handleProcess(request, env) {
     '"hasCitation": true|false}, ...5-8 slides]}\n' +
     "Notebook should read like real study notes: start with a heading, include at least one " +
     "definition, one quote pulled from the source, one researchFinding or importantPoint, and " +
-    "end with an aiSummary block. Ground everything in the given source text — do not invent facts.";
+    "end with an aiSummary block. Ground everything in the given source text — do not invent facts. " +
+    "Write all notebook/slide text in the same language as the source text (Thai source -> Thai notes).";
 
   const prompt =
     `Source type: ${sourceType}\n` +
